@@ -31,6 +31,7 @@
     "@circle-fin/provider-cctp-v2": "^1.8.3",
     "@circle-fin/swap-kit": "^1.2.3",
     "@circle-fin/unified-balance-kit": "^1.1.3",
+    "@metamask/connect-multichain": "^1.2.0",
     "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^1.98.4",
     "express": "^5.1.0",

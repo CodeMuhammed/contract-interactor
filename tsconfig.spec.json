@@ -3,13 +3,17 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "outDir": "./out-tsc/spec",
-    "types": [
-      "vitest/globals"
-    ]
+    "composite": true,
+    "tsBuildInfoFile": "./out-tsc/tsconfig.spec.tsbuildinfo"
   },
   "include": [
     "src/**/*.d.ts",
+    "src/**/*.ts",
     "src/**/*.spec.ts"
+  ],
+  "exclude": [
+    "src/main.ts",
+    "src/main.server.ts",
+    "src/server.ts"
   ]
 }
