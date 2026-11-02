@@ -1,4 +1,193 @@
-<main class="app">
-  {{title()}}
+<main class="page-shell">
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Contract Interactor home">
+      <span class="brand-mark" aria-hidden="true">CI</span>
+      <span>Contract Interactor</span>
+    </a>
+
+    <div class="network-badge" aria-label="NEAR testnet network">
+      <span class="network-dot" aria-hidden="true"></span>
+      NEAR Testnet
+    </div>
+  </header>
+
+  <section class="connect-layout" aria-labelledby="page-title">
+    <div class="intro">
+      <p class="eyebrow">SUDOSTAKE VAULT FACTORY</p>
+      <h1 id="page-title">Create a NEAR vault</h1>
+      <p class="intro-copy">
+        Connect a testnet wallet to deploy a personal vault through the SudoStake
+        factory.
+      </p>
+    </div>
+
+    <section class="wallet-card" aria-labelledby="wallet-card-title">
+      <div class="card-heading">
+        <div class="near-mark" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+        <div class="card-heading-copy">
+          <h2 id="wallet-card-title">NEAR wallet</h2>
+          <p>Choose from supported NEAR wallets</p>
+        </div>
+        @if (accountId()) {
+          <span class="connection-status connected">
+            <span class="status-dot" aria-hidden="true"></span>
+            Connected
+          </span>
+        } @else if (isInitializing()) {
+          <span class="connection-status">Loading</span>
+        } @else {
+          <span class="connection-status">Not connected</span>
+        }
+      </div>
+
+      @if (accountId()) {
+        <div class="account-details" aria-live="polite">
+          <span class="field-label">ACCOUNT ID</span>
+          <code>{{ accountId() }}</code>
+          @if (walletName()) {
+            <span class="wallet-source">via {{ walletName() }}</span>
+          }
+        </div>
+      }
+
+      @if (errorMessage()) {
+        <p class="error-message" role="alert">{{ errorMessage() }}</p>
+      }
+
+      @if (accountId()) {
+        <button
+          class="button button-secondary"
+          type="button"
+          (click)="disconnectNearWallet()"
+          [disabled]="isBusy()"
+        >
+          {{ isBusy() ? 'Disconnecting…' : 'Disconnect wallet' }}
+        </button>
+      } @else {
+        <button
+          class="button button-primary"
+          type="button"
+          (click)="connectNearWallet()"
+          [disabled]="isInitializing() || !isReady() || isBusy()"
+        >
+          @if (isInitializing()) {
+            Loading wallet options…
+          } @else if (!isReady()) {
+            Wallet options unavailable
+          } @else if (isBusy()) {
+            Opening wallet picker…
+          } @else {
+            Connect NEAR wallet
+          }
+          @if (isReady() && !isBusy()) {
+            <span class="button-arrow" aria-hidden="true">↗</span>
+          }
+        </button>
+      }
+
+      <p class="privacy-note">
+        Your wallet keeps control of your keys. This connection only shares your
+        account with the app.
+      </p>
+    </section>
+
+    <section class="vault-card" aria-labelledby="vault-card-title">
+      <div class="vault-card-heading">
+        <div>
+          <p class="eyebrow">FACTORY</p>
+          <h2 id="vault-card-title">New vault</h2>
+        </div>
+        <span class="factory-badge">nzaza.testnet</span>
+      </div>
+
+      <p class="vault-description">
+        The factory creates a separate smart contract account for your vault.
+      </p>
+
+      <div class="factory-stats" aria-live="polite">
+        <div class="factory-stat">
+          <span>Creation fee</span>
+          @if (isLoadingFactoryState()) {
+            <strong>Loading…</strong>
+          } @else if (mintingFeeDisplay()) {
+            <strong>{{ mintingFeeDisplay() }}</strong>
+          } @else {
+            <strong>Unavailable</strong>
+          }
+        </div>
+        <div class="factory-stat">
+          <span>Vaults created</span>
+          <strong>{{ mintedVaultCount() ?? '—' }}</strong>
+        </div>
+      </div>
+
+      @if (factoryErrorMessage()) {
+        <div class="error-message" role="alert">
+          <span>{{ factoryErrorMessage() }}</span>
+          <button
+            class="text-button"
+            type="button"
+            (click)="refreshFactoryState()"
+            [disabled]="isLoadingFactoryState()"
+          >
+            Retry
+          </button>
+        </div>
+      }
+
+      @if (vaultErrorMessage()) {
+        <p class="error-message" role="alert">{{ vaultErrorMessage() }}</p>
+      }
+
+      @if (vaultSuccessMessage()) {
+        <div class="success-message" role="status" aria-live="polite">
+          <p>{{ vaultSuccessMessage() }}</p>
+          @if (vaultTransactionHash()) {
+            <a
+              [href]="'https://explorer.testnet.near.org/transactions/' + vaultTransactionHash()"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              View transaction <span aria-hidden="true">↗</span>
+            </a>
+          }
+        </div>
+      }
+
+      <button
+        class="button button-primary"
+        type="button"
+        (click)="createVault()"
+        [disabled]="!accountId() || isLoadingFactoryState() || !mintingFeeDisplay() || isCreatingVault()"
+      >
+        @if (isCreatingVault()) {
+          Confirm in your wallet…
+        } @else if (!accountId()) {
+          Connect wallet to create
+        } @else if (isLoadingFactoryState()) {
+          Loading factory fee…
+        } @else if (!mintingFeeDisplay()) {
+          Factory unavailable
+        } @else {
+          Create vault
+          <span class="button-arrow" aria-hidden="true">↗</span>
+        }
+      </button>
+
+      <p class="vault-note">
+        The exact factory fee is attached to the transaction. Network gas is charged
+        separately and shown by your wallet before approval.
+      </p>
+    </section>
+
+    <p class="network-note">Network: <strong>NEAR Testnet</strong></p>
+  </section>
+
+  <footer class="page-footer">
+    <span>Connect securely with your preferred NEAR wallet.</span>
+  </footer>
 </main>
+
 <router-outlet />
