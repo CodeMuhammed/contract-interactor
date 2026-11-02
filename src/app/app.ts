@@ -7,7 +7,7 @@ import type {
 } from '@hot-labs/near-connect';
 
 const FACTORY_ACCOUNT_ID = 'nzaza.testnet';
-const TESTNET_RPC_URL = 'https://rpc.testnet.near.org';
+const TESTNET_RPC_URL = 'https://rpc.testnet.fastnear.com';
 const FACTORY_CALL_GAS = '300000000000000';
 const YOCTO_PER_NEAR = 10n ** 24n;
 
@@ -15,6 +15,28 @@ interface FactoryContractState {
   owner: string;
   vault_minting_fee: string;
   vault_counter: number;
+}
+
+interface VaultContractState {
+  owner: string;
+  index: number;
+  version: number;
+  liquidity_request: unknown | null;
+  accepted_offer: unknown | null;
+  is_listed_for_takeover: boolean;
+  active_validators: string[];
+  current_epoch: number;
+}
+
+interface UserVaultSummary {
+  accountId: string;
+  index: number;
+  version: number;
+  activeValidators: string[];
+  hasLiquidityRequest: boolean;
+  hasAcceptedOffer: boolean;
+  isListedForTakeover: boolean;
+  currentEpoch: number;
 }
 
 interface NearRpcResponse {
@@ -43,9 +65,15 @@ export class App implements OnDestroy {
   protected readonly vaultErrorMessage = signal('');
   protected readonly vaultSuccessMessage = signal('');
   protected readonly vaultTransactionHash = signal<string | null>(null);
+  protected readonly userVaults = signal<UserVaultSummary[]>([]);
+  protected readonly isLoadingUserVaults = signal(false);
+  protected readonly vaultScanProgress = signal(0);
+  protected readonly vaultScanTotal = signal(0);
+  protected readonly userVaultsErrorMessage = signal('');
 
   private connector: NearConnectorInstance | null = null;
   private destroyed = false;
+  private vaultScanRequestId = 0;
 
   constructor() {
     afterNextRender(() => {
@@ -158,6 +186,7 @@ export class App implements OnDestroy {
         vaultId ? `Vault created: ${vaultId}` : 'Vault creation transaction confirmed.',
       );
       void this.refreshFactoryState();
+      void this.refreshUserVaults();
     } catch (error) {
       this.vaultErrorMessage.set(
         error instanceof Error
@@ -166,6 +195,86 @@ export class App implements OnDestroy {
       );
     } finally {
       this.isCreatingVault.set(false);
+    }
+  }
+
+  protected async refreshUserVaults(): Promise<void> {
+    const connectedAccountId = this.accountId();
+    if (!connectedAccountId) return;
+
+    const requestId = ++this.vaultScanRequestId;
+    this.isLoadingUserVaults.set(true);
+    this.userVaultsErrorMessage.set('');
+    this.userVaults.set([]);
+    this.vaultScanProgress.set(0);
+    this.vaultScanTotal.set(0);
+
+    try {
+      const factoryState = await this.fetchFactoryState();
+      if (!this.isCurrentVaultScan(requestId, connectedAccountId)) return;
+
+      this.applyFactoryState(factoryState);
+      this.vaultScanTotal.set(factoryState.vault_counter);
+
+      const matches: UserVaultSummary[] = [];
+      let nextIndex = 0;
+      let completed = 0;
+      let unreadable = 0;
+      const workerCount = Math.min(8, factoryState.vault_counter);
+      const workers = Array.from({ length: workerCount }, async () => {
+        while (
+          nextIndex < factoryState.vault_counter &&
+          this.isCurrentVaultScan(requestId, connectedAccountId)
+        ) {
+          const index = nextIndex++;
+          const vaultAccountId = `vault-${index}.${FACTORY_ACCOUNT_ID}`;
+
+          try {
+            const state = await this.fetchVaultState(vaultAccountId);
+            if (state.owner === connectedAccountId) {
+              matches.push({
+                accountId: vaultAccountId,
+                index: state.index,
+                version: state.version,
+                activeValidators: state.active_validators,
+                hasLiquidityRequest:
+                  state.liquidity_request !== null && state.liquidity_request !== undefined,
+                hasAcceptedOffer:
+                  state.accepted_offer !== null && state.accepted_offer !== undefined,
+                isListedForTakeover: state.is_listed_for_takeover,
+                currentEpoch: state.current_epoch,
+              });
+            }
+          } catch {
+            unreadable += 1;
+          } finally {
+            completed += 1;
+            if (this.isCurrentVaultScan(requestId, connectedAccountId)) {
+              this.vaultScanProgress.set(completed);
+            }
+          }
+        }
+      });
+
+      await Promise.all(workers);
+      if (!this.isCurrentVaultScan(requestId, connectedAccountId)) return;
+
+      this.userVaults.set(matches.sort((a, b) => b.index - a.index));
+      if (unreadable > 0) {
+        this.userVaultsErrorMessage.set(
+          `Could not read ${unreadable} of ${factoryState.vault_counter} factory vaults. The list may be incomplete; retry to refresh it.`,
+        );
+      }
+    } catch {
+      if (this.isCurrentVaultScan(requestId, connectedAccountId)) {
+        this.userVaultsErrorMessage.set(
+          'Could not load vaults from NEAR testnet. Try again.',
+        );
+      }
+    } finally {
+      if (requestId === this.vaultScanRequestId) {
+        this.isLoadingUserVaults.set(false);
+      }
     }
   }
 
@@ -197,30 +306,10 @@ export class App implements OnDestroy {
   }
 
   private async fetchFactoryState(): Promise<FactoryContractState> {
-    const response = await fetch(TESTNET_RPC_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 'contract-interactor-factory-state',
-        method: 'query',
-        params: {
-          request_type: 'call_function',
-          finality: 'final',
-          account_id: FACTORY_ACCOUNT_ID,
-          method_name: 'get_contract_state',
-          args_base64: 'e30=',
-        },
-      }),
-    });
-
-    const rpcResponse = (await response.json()) as NearRpcResponse;
-    if (!response.ok || rpcResponse.error || !rpcResponse.result?.result) {
-      throw new Error(rpcResponse.error?.message ?? 'Factory state is unavailable.');
-    }
-
-    const json = new TextDecoder().decode(Uint8Array.from(rpcResponse.result.result));
-    const state = JSON.parse(json) as Partial<FactoryContractState>;
+    const state = await this.fetchContractView<Partial<FactoryContractState>>(
+      FACTORY_ACCOUNT_ID,
+      'get_contract_state',
+    );
     if (
       typeof state.owner !== 'string' ||
       typeof state.vault_minting_fee !== 'string' ||
@@ -233,6 +322,84 @@ export class App implements OnDestroy {
     }
 
     return state as FactoryContractState;
+  }
+
+  private async fetchVaultState(accountId: string): Promise<VaultContractState> {
+    const state = await this.fetchContractView<Partial<VaultContractState>>(
+      accountId,
+      'get_vault_state',
+    );
+    if (
+      typeof state.owner !== 'string' ||
+      typeof state.index !== 'number' ||
+      !Number.isSafeInteger(state.index) ||
+      typeof state.version !== 'number' ||
+      !Number.isSafeInteger(state.version) ||
+      typeof state.is_listed_for_takeover !== 'boolean' ||
+      !Array.isArray(state.active_validators) ||
+      !state.active_validators.every((validator) => typeof validator === 'string') ||
+      typeof state.current_epoch !== 'number' ||
+      !Number.isSafeInteger(state.current_epoch)
+    ) {
+      throw new Error('A vault returned invalid state.');
+    }
+
+    return state as VaultContractState;
+  }
+
+  private async fetchContractView<T>(accountId: string, methodName: string): Promise<T> {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      let response: Response;
+      try {
+        response = await fetch(TESTNET_RPC_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: `contract-interactor-${methodName}`,
+            method: 'query',
+            params: {
+              request_type: 'call_function',
+              finality: 'final',
+              account_id: accountId,
+              method_name: methodName,
+              args_base64: 'e30=',
+            },
+          }),
+        });
+      } catch (error) {
+        if (attempt === 2) throw error;
+        await this.waitForRpcRetry(attempt);
+        continue;
+      }
+
+      if (response.status === 429 || response.status >= 500) {
+        if (attempt === 2) {
+          throw new Error(`NEAR RPC is temporarily unavailable (HTTP ${response.status}).`);
+        }
+        await this.waitForRpcRetry(attempt);
+        continue;
+      }
+
+      const rpcResponse = (await response.json()) as NearRpcResponse;
+      if (!response.ok || rpcResponse.error || !rpcResponse.result?.result) {
+        throw new Error(rpcResponse.error?.message ?? `${methodName} is unavailable.`);
+      }
+
+      const json = new TextDecoder().decode(Uint8Array.from(rpcResponse.result.result));
+      return JSON.parse(json) as T;
+    }
+
+    throw new Error(`${methodName} is unavailable.`);
+  }
+
+  private waitForRpcRetry(attempt: number): Promise<void> {
+    const delayMs = 300 * 2 ** attempt;
+    return new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+
+  private isCurrentVaultScan(requestId: number, accountId: string): boolean {
+    return requestId === this.vaultScanRequestId && this.accountId() === accountId;
   }
 
   private applyFactoryState(state: FactoryContractState): void {
@@ -307,14 +474,32 @@ export class App implements OnDestroy {
     wallet: NearWalletBase,
     accountId: string | null,
   ): void {
+    const accountChanged = this.accountId() !== accountId;
     this.walletName.set(wallet.manifest.name);
     this.accountId.set(accountId);
     this.errorMessage.set('');
+    if (accountChanged) {
+      if (accountId) {
+        void this.refreshUserVaults();
+      } else {
+        this.clearUserVaults();
+      }
+    }
   }
 
   private clearConnectedWallet(): void {
     this.walletName.set(null);
     this.accountId.set(null);
+    this.clearUserVaults();
+  }
+
+  private clearUserVaults(): void {
+    this.vaultScanRequestId += 1;
+    this.userVaults.set([]);
+    this.isLoadingUserVaults.set(false);
+    this.vaultScanProgress.set(0);
+    this.vaultScanTotal.set(0);
+    this.userVaultsErrorMessage.set('');
   }
 
   private removeConnectorListeners(): void {

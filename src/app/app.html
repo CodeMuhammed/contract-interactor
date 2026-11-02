@@ -182,6 +182,95 @@
       </p>
     </section>
 
+    @if (accountId()) {
+      <section class="user-vaults-card" aria-labelledby="user-vaults-title">
+        <div class="user-vaults-heading">
+          <div>
+            <p class="eyebrow">CONNECTED ACCOUNT</p>
+            <h2 id="user-vaults-title">My vaults</h2>
+            <p class="vault-description">Vaults owned by {{ accountId() }}</p>
+          </div>
+          <button
+            class="text-button refresh-vaults-button"
+            type="button"
+            (click)="refreshUserVaults()"
+            [disabled]="isLoadingUserVaults()"
+          >
+            {{ isLoadingUserVaults() ? 'Scanning…' : 'Refresh' }}
+          </button>
+        </div>
+
+        @if (isLoadingUserVaults()) {
+          <p class="vault-scan-status" role="status" aria-live="polite">
+            @if (vaultScanTotal() > 0) {
+              Checking {{ vaultScanProgress() }} of {{ vaultScanTotal() }} factory vaults…
+            } @else {
+              Loading the factory vault count…
+            }
+          </p>
+        }
+
+        @if (userVaultsErrorMessage()) {
+          <p class="error-message" role="alert">{{ userVaultsErrorMessage() }}</p>
+        }
+
+        @if (userVaults().length > 0) {
+          <div class="user-vault-list">
+            @for (vault of userVaults(); track vault.accountId) {
+              <article class="user-vault-entry">
+                <div class="user-vault-entry-heading">
+                  <code>{{ vault.accountId }}</code>
+                  <a
+                    [href]="'https://explorer.testnet.near.org/accounts/' + vault.accountId"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Explorer <span aria-hidden="true">↗</span>
+                  </a>
+                </div>
+                <div class="user-vault-details">
+                  <div>
+                    <span>Version</span>
+                    <strong>{{ vault.version }}</strong>
+                  </div>
+                  <div>
+                    <span>Active validators</span>
+                    <strong>
+                      {{ vault.activeValidators.length ? vault.activeValidators.join(', ') : 'None' }}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Liquidity</span>
+                    <strong>
+                      @if (vault.hasAcceptedOffer) {
+                        Offer accepted
+                      } @else if (vault.hasLiquidityRequest) {
+                        Request open
+                      } @else {
+                        None
+                      }
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Takeover listing</span>
+                    <strong>{{ vault.isListedForTakeover ? 'Listed' : 'Not listed' }}</strong>
+                  </div>
+                  <div>
+                    <span>Current epoch</span>
+                    <strong>{{ vault.currentEpoch }}</strong>
+                  </div>
+                </div>
+              </article>
+            }
+          </div>
+        } @else if (!isLoadingUserVaults() && !userVaultsErrorMessage()) {
+          <p class="empty-vaults-message">
+            No vaults found for this account. Create a vault above to get started.
+          </p>
+        }
+      </section>
+    }
+
     <p class="network-note">Network: <strong>NEAR Testnet</strong></p>
   </section>
 

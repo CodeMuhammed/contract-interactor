@@ -432,6 +432,121 @@ h1 {
   text-align: center;
 }
 
+.user-vaults-card {
+  margin-top: 15px;
+  padding: 24px 25px;
+  border: 1px solid #e3e9e5;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 14px 34px rgba(26, 57, 44, 0.045);
+}
+
+.user-vaults-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.user-vaults-heading .eyebrow {
+  margin-bottom: 7px;
+}
+
+.user-vaults-heading h2 {
+  margin: 0;
+  color: #1d3029;
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+}
+
+.user-vaults-heading .vault-description {
+  margin-bottom: 0;
+  overflow-wrap: anywhere;
+}
+
+.refresh-vaults-button {
+  margin-top: 5px;
+}
+
+.vault-scan-status,
+.empty-vaults-message {
+  margin: 16px 0 0;
+  color: #718179;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.user-vault-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.user-vault-entry {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #e8eee9;
+  border-radius: 12px;
+  background: #f9fbfa;
+}
+
+.user-vault-entry-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.user-vault-entry-heading code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #1c5943;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.user-vault-entry-heading a {
+  flex: 0 0 auto;
+  color: #147553;
+  font-size: 10px;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.user-vault-entry-heading a:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.user-vault-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 10px;
+  margin-top: 13px;
+}
+
+.user-vault-details div {
+  min-width: 0;
+}
+
+.user-vault-details span {
+  display: block;
+  margin-bottom: 5px;
+  color: #7c8b84;
+  font-size: 9px;
+}
+
+.user-vault-details strong {
+  display: block;
+  overflow-wrap: anywhere;
+  color: #365c4b;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
 .error-message {
   margin: 17px 0 0;
   padding: 11px 12px;
@@ -480,6 +595,11 @@ h1 {
   }
 
   .vault-card {
+    padding: 19px;
+    border-radius: 17px;
+  }
+
+  .user-vaults-card {
     padding: 19px;
     border-radius: 17px;
   }
