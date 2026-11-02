@@ -27,7 +27,7 @@
     "@circle-fin/adapter-solana": "^1.5.10",
     "@circle-fin/adapter-viem-v2": "^1.11.2",
     "@circle-fin/app-kit": "^1.7.0",
-    "@circle-fin/bridge-kit": "^1.10.2",
+    "@circle-fin/bridge-kit": "^1.15.1",
     "@circle-fin/provider-cctp-v2": "^1.8.3",
     "@circle-fin/swap-kit": "^1.2.3",
     "@circle-fin/unified-balance-kit": "^1.1.3",

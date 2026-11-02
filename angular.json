@@ -69,7 +69,10 @@
               "buildTarget": "contract-interactor:build:development"
             }
           },
-          "defaultConfiguration": "development"
+          "defaultConfiguration": "development",
+          "options": {
+            "allowedHosts": ["phentermine-dpi-cancelled-warranties.trycloudflare.com"]
+          }
         },
         "test": {
           "builder": "@angular/build:unit-test"

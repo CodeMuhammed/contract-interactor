@@ -1,6 +1,6 @@
 import { Component, signal } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
-import {createMultichainClient} from '@metamask/connect-multichain'
+import {createMultichainClient, getInfuraRpcUrls} from '@metamask/connect-multichain'
 
 @Component({
   selector: 'app-root',
