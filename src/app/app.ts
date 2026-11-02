@@ -17,14 +17,54 @@ interface FactoryContractState {
   vault_counter: number;
 }
 
+type JsonAmount = string | number;
+
+interface LiquidityRequestDetails {
+  token: string;
+  amount: JsonAmount;
+  interest: JsonAmount;
+  collateral: JsonAmount;
+  duration: number;
+  created_at: JsonAmount;
+}
+
+interface AcceptedOfferDetails {
+  lender: string;
+  accepted_at: JsonAmount;
+}
+
+interface UnstakeEntryDetails {
+  amount: JsonAmount;
+  epoch_height: number;
+}
+
+interface LiquidationDetails {
+  liquidated: JsonAmount;
+}
+
+interface CounterOfferDetails {
+  proposer: string;
+  amount: JsonAmount;
+  timestamp: JsonAmount;
+}
+
+interface RefundEntryDetails {
+  token: string | null;
+  proposer: string;
+  amount: JsonAmount;
+  added_at_epoch: number;
+}
+
 interface VaultContractState {
   owner: string;
   index: number;
   version: number;
-  liquidity_request: unknown | null;
-  accepted_offer: unknown | null;
+  liquidity_request: LiquidityRequestDetails | null;
+  accepted_offer: AcceptedOfferDetails | null;
   is_listed_for_takeover: boolean;
   active_validators: string[];
+  unstake_entries: Array<[string, UnstakeEntryDetails]>;
+  liquidation: LiquidationDetails | null;
   current_epoch: number;
 }
 
@@ -39,8 +79,29 @@ interface UserVaultSummary {
   currentEpoch: number;
 }
 
+interface VaultFullDetails {
+  state: VaultContractState;
+  accountBalance: string;
+  lockedBalance: string;
+  availableBalance: string;
+  storageCost: string;
+  storageUsage: number;
+  codeHash: string;
+  blockHeight: number;
+  counterOffers: Array<{ accountId: string; offer: CounterOfferDetails }>;
+  refundEntries: Array<{ id: number; entry: RefundEntryDetails }>;
+}
+
 interface NearRpcResponse {
-  result?: { result?: number[] };
+  result?: {
+    result?: number[];
+    amount?: string;
+    locked?: string;
+    storage_usage?: number;
+    code_hash?: string;
+    block_height?: number;
+    block_hash?: string;
+  };
   error?: { message?: string };
 }
 
@@ -70,10 +131,15 @@ export class App implements OnDestroy {
   protected readonly vaultScanProgress = signal(0);
   protected readonly vaultScanTotal = signal(0);
   protected readonly userVaultsErrorMessage = signal('');
+  protected readonly selectedVaultAccountId = signal<string | null>(null);
+  protected readonly selectedVaultDetails = signal<VaultFullDetails | null>(null);
+  protected readonly isLoadingVaultDetails = signal(false);
+  protected readonly vaultDetailsErrorMessage = signal('');
 
   private connector: NearConnectorInstance | null = null;
   private destroyed = false;
   private vaultScanRequestId = 0;
+  private vaultDetailsRequestId = 0;
 
   constructor() {
     afterNextRender(() => {
@@ -206,6 +272,7 @@ export class App implements OnDestroy {
     this.isLoadingUserVaults.set(true);
     this.userVaultsErrorMessage.set('');
     this.userVaults.set([]);
+    this.clearSelectedVaultDetails();
     this.vaultScanProgress.set(0);
     this.vaultScanTotal.set(0);
 
@@ -278,6 +345,78 @@ export class App implements OnDestroy {
     }
   }
 
+  protected async toggleVaultDetails(vault: UserVaultSummary): Promise<void> {
+    if (
+      this.selectedVaultAccountId() === vault.accountId &&
+      !this.vaultDetailsErrorMessage()
+    ) {
+      this.clearSelectedVaultDetails();
+      return;
+    }
+
+    const requestId = ++this.vaultDetailsRequestId;
+    this.selectedVaultAccountId.set(vault.accountId);
+    this.selectedVaultDetails.set(null);
+    this.vaultDetailsErrorMessage.set('');
+    this.isLoadingVaultDetails.set(true);
+
+    try {
+      const [state, account, availableBalance, storageCost, counterOffers, refundEntries] =
+        await Promise.all([
+          this.fetchVaultState(vault.accountId),
+          this.fetchVaultAccountView(vault.accountId),
+          this.fetchContractView<JsonAmount>(vault.accountId, 'view_available_balance'),
+          this.fetchContractView<JsonAmount>(vault.accountId, 'view_storage_cost'),
+          this.fetchContractView<Record<string, CounterOfferDetails> | null>(
+            vault.accountId,
+            'get_counter_offers',
+          ),
+          this.fetchContractView<Array<[number, RefundEntryDetails]>>(
+            vault.accountId,
+            'get_refund_entries',
+            'eyJhY2NvdW50X2lkIjpudWxsfQ==',
+          ),
+        ]);
+
+      if (requestId !== this.vaultDetailsRequestId) return;
+      if (
+        !account.amount ||
+        !account.locked ||
+        typeof account.storage_usage !== 'number' ||
+        typeof account.code_hash !== 'string' ||
+        typeof account.block_height !== 'number'
+      ) {
+        throw new Error('The NEAR account returned incomplete details.');
+      }
+
+      this.selectedVaultDetails.set({
+        state,
+        accountBalance: account.amount,
+        lockedBalance: account.locked,
+        availableBalance: String(availableBalance),
+        storageCost: String(storageCost),
+        storageUsage: account.storage_usage,
+        codeHash: account.code_hash,
+        blockHeight: account.block_height,
+        counterOffers: Object.entries(counterOffers ?? {}).map(([accountId, offer]) => ({
+          accountId,
+          offer,
+        })),
+        refundEntries: refundEntries.map(([id, entry]) => ({ id, entry })),
+      });
+    } catch {
+      if (requestId === this.vaultDetailsRequestId) {
+        this.vaultDetailsErrorMessage.set(
+          'Could not load the full vault details from NEAR testnet. Try again.',
+        );
+      }
+    } finally {
+      if (requestId === this.vaultDetailsRequestId) {
+        this.isLoadingVaultDetails.set(false);
+      }
+    }
+  }
+
   private async initializeNearWallet(): Promise<void> {
     try {
       const { NearConnector } = await import('@hot-labs/near-connect');
@@ -338,6 +477,7 @@ export class App implements OnDestroy {
       typeof state.is_listed_for_takeover !== 'boolean' ||
       !Array.isArray(state.active_validators) ||
       !state.active_validators.every((validator) => typeof validator === 'string') ||
+      !Array.isArray(state.unstake_entries) ||
       typeof state.current_epoch !== 'number' ||
       !Number.isSafeInteger(state.current_epoch)
     ) {
@@ -347,7 +487,43 @@ export class App implements OnDestroy {
     return state as VaultContractState;
   }
 
-  private async fetchContractView<T>(accountId: string, methodName: string): Promise<T> {
+  private async fetchContractView<T>(
+    accountId: string,
+    methodName: string,
+    argsBase64 = 'e30=',
+  ): Promise<T> {
+    const rpcResponse = await this.requestNearRpc(`view-${accountId}-${methodName}`, {
+      request_type: 'call_function',
+      finality: 'final',
+      account_id: accountId,
+      method_name: methodName,
+      args_base64: argsBase64,
+    });
+    if (!rpcResponse.result?.result) {
+      throw new Error(`${methodName} did not return a result.`);
+    }
+
+    const json = new TextDecoder().decode(Uint8Array.from(rpcResponse.result.result));
+    return JSON.parse(json) as T;
+  }
+
+  private async fetchVaultAccountView(accountId: string): Promise<NonNullable<NearRpcResponse['result']>> {
+    const rpcResponse = await this.requestNearRpc(`account-${accountId}`, {
+      request_type: 'view_account',
+      finality: 'final',
+      account_id: accountId,
+    });
+    if (!rpcResponse.result) {
+      throw new Error('The NEAR account did not return a result.');
+    }
+
+    return rpcResponse.result;
+  }
+
+  private async requestNearRpc(
+    id: string,
+    params: Record<string, string>,
+  ): Promise<NearRpcResponse> {
     for (let attempt = 0; attempt < 3; attempt += 1) {
       let response: Response;
       try {
@@ -356,15 +532,9 @@ export class App implements OnDestroy {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             jsonrpc: '2.0',
-            id: `contract-interactor-${methodName}`,
+            id,
             method: 'query',
-            params: {
-              request_type: 'call_function',
-              finality: 'final',
-              account_id: accountId,
-              method_name: methodName,
-              args_base64: 'e30=',
-            },
+            params,
           }),
         });
       } catch (error) {
@@ -382,15 +552,14 @@ export class App implements OnDestroy {
       }
 
       const rpcResponse = (await response.json()) as NearRpcResponse;
-      if (!response.ok || rpcResponse.error || !rpcResponse.result?.result) {
-        throw new Error(rpcResponse.error?.message ?? `${methodName} is unavailable.`);
+      if (!response.ok || rpcResponse.error) {
+        throw new Error(rpcResponse.error?.message ?? `NEAR RPC returned HTTP ${response.status}.`);
       }
 
-      const json = new TextDecoder().decode(Uint8Array.from(rpcResponse.result.result));
-      return JSON.parse(json) as T;
+      return rpcResponse;
     }
 
-    throw new Error(`${methodName} is unavailable.`);
+    throw new Error('NEAR RPC is unavailable.');
   }
 
   private waitForRpcRetry(attempt: number): Promise<void> {
@@ -407,7 +576,7 @@ export class App implements OnDestroy {
     this.mintedVaultCount.set(state.vault_counter);
   }
 
-  private formatYoctoNear(amount: string): string {
+  protected formatYoctoNear(amount: JsonAmount): string {
     const value = BigInt(amount);
     const whole = value / YOCTO_PER_NEAR;
     const fraction = (value % YOCTO_PER_NEAR)
@@ -415,6 +584,13 @@ export class App implements OnDestroy {
       .padStart(24, '0')
       .replace(/0+$/, '');
     return `${whole.toLocaleString('en-US')}${fraction ? `.${fraction}` : ''} NEAR`;
+  }
+
+  protected formatNanoseconds(value: JsonAmount): string {
+    const milliseconds = Number(BigInt(value) / 1_000_000n);
+    return Number.isFinite(milliseconds)
+      ? new Date(milliseconds).toLocaleString()
+      : String(value);
   }
 
   private isFailedOutcome(outcome: unknown): boolean {
@@ -500,6 +676,15 @@ export class App implements OnDestroy {
     this.vaultScanProgress.set(0);
     this.vaultScanTotal.set(0);
     this.userVaultsErrorMessage.set('');
+    this.clearSelectedVaultDetails();
+  }
+
+  private clearSelectedVaultDetails(): void {
+    this.vaultDetailsRequestId += 1;
+    this.selectedVaultAccountId.set(null);
+    this.selectedVaultDetails.set(null);
+    this.isLoadingVaultDetails.set(false);
+    this.vaultDetailsErrorMessage.set('');
   }
 
   private removeConnectorListeners(): void {

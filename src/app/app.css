@@ -491,6 +491,22 @@ h1 {
   background: #f9fbfa;
 }
 
+.user-vault-entry-trigger {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.user-vault-entry-trigger:focus-visible {
+  outline: 3px solid rgba(19, 121, 91, 0.25);
+  outline-offset: 4px;
+}
+
 .user-vault-entry-heading {
   display: flex;
   align-items: flex-start;
@@ -507,15 +523,23 @@ h1 {
   line-height: 1.5;
 }
 
-.user-vault-entry-heading a {
+.user-vault-entry-heading span {
   flex: 0 0 auto;
+  color: #147553;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.vault-explorer-link {
+  display: inline-block;
+  margin-top: 12px;
   color: #147553;
   font-size: 10px;
   font-weight: 650;
   text-decoration: none;
 }
 
-.user-vault-entry-heading a:hover {
+.vault-explorer-link:hover {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -544,6 +568,109 @@ h1 {
   color: #365c4b;
   font-size: 11px;
   font-weight: 650;
+  line-height: 1.45;
+}
+
+.vault-full-details {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #e4ebe6;
+}
+
+.full-details-section + .full-details-section {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid #e8eee9;
+}
+
+.full-details-section h3 {
+  margin: 0 0 11px;
+  color: #294a3b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.full-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 10px;
+  margin: 0;
+}
+
+.full-detail-grid div {
+  min-width: 0;
+}
+
+.full-detail-grid dt {
+  margin-bottom: 5px;
+  color: #7c8b84;
+  font-size: 9px;
+}
+
+.full-detail-grid dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #365c4b;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.full-detail-wide {
+  grid-column: 1 / -1;
+}
+
+.breakable-value,
+.detail-list code {
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.detail-empty {
+  margin: 0;
+  color: #718179;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.detail-list {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.detail-list li {
+  color: #365c4b;
+  font-size: 11px;
+}
+
+.detail-record-list {
+  display: grid;
+  gap: 8px;
+}
+
+.detail-record {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #e8eee9;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.detail-record strong {
+  overflow-wrap: anywhere;
+  color: #365c4b;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.detail-record span {
+  overflow-wrap: anywhere;
+  color: #718179;
+  font-size: 10px;
   line-height: 1.45;
 }
 

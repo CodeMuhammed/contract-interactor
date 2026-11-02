@@ -218,48 +218,272 @@
           <div class="user-vault-list">
             @for (vault of userVaults(); track vault.accountId) {
               <article class="user-vault-entry">
-                <div class="user-vault-entry-heading">
-                  <code>{{ vault.accountId }}</code>
-                  <a
-                    [href]="'https://explorer.testnet.near.org/accounts/' + vault.accountId"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Explorer <span aria-hidden="true">↗</span>
-                  </a>
-                </div>
-                <div class="user-vault-details">
-                  <div>
-                    <span>Version</span>
-                    <strong>{{ vault.version }}</strong>
+                <button
+                  class="user-vault-entry-trigger"
+                  type="button"
+                  (click)="toggleVaultDetails(vault)"
+                  [attr.aria-expanded]="selectedVaultAccountId() === vault.accountId"
+                >
+                  <div class="user-vault-entry-heading">
+                    <code>{{ vault.accountId }}</code>
+                    <span>
+                      {{ selectedVaultAccountId() === vault.accountId ? 'Hide details' : 'Full details' }}
+                    </span>
                   </div>
-                  <div>
-                    <span>Active validators</span>
-                    <strong>
-                      {{ vault.activeValidators.length ? vault.activeValidators.join(', ') : 'None' }}
-                    </strong>
+                  <div class="user-vault-details">
+                    <div>
+                      <span>Version</span>
+                      <strong>{{ vault.version }}</strong>
+                    </div>
+                    <div>
+                      <span>Active validators</span>
+                      <strong>
+                        {{ vault.activeValidators.length ? vault.activeValidators.join(', ') : 'None' }}
+                      </strong>
+                    </div>
+                    <div>
+                      <span>Liquidity</span>
+                      <strong>
+                        @if (vault.hasAcceptedOffer) {
+                          Offer accepted
+                        } @else if (vault.hasLiquidityRequest) {
+                          Request open
+                        } @else {
+                          None
+                        }
+                      </strong>
+                    </div>
+                    <div>
+                      <span>Takeover listing</span>
+                      <strong>{{ vault.isListedForTakeover ? 'Listed' : 'Not listed' }}</strong>
+                    </div>
+                    <div>
+                      <span>Current epoch</span>
+                      <strong>{{ vault.currentEpoch }}</strong>
+                    </div>
                   </div>
-                  <div>
-                    <span>Liquidity</span>
-                    <strong>
-                      @if (vault.hasAcceptedOffer) {
-                        Offer accepted
-                      } @else if (vault.hasLiquidityRequest) {
-                        Request open
-                      } @else {
-                        None
-                      }
-                    </strong>
+                </button>
+
+                <a
+                  class="vault-explorer-link"
+                  [href]="'https://explorer.testnet.near.org/accounts/' + vault.accountId"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Open in Explorer <span aria-hidden="true">↗</span>
+                </a>
+
+                @if (selectedVaultAccountId() === vault.accountId) {
+                  <div class="vault-full-details">
+                    @if (isLoadingVaultDetails()) {
+                      <p class="vault-scan-status" role="status" aria-live="polite">
+                        Loading full vault details…
+                      </p>
+                    }
+
+                    @if (vaultDetailsErrorMessage()) {
+                      <p class="error-message" role="alert">{{ vaultDetailsErrorMessage() }}</p>
+                    }
+
+                    @if (selectedVaultDetails(); as details) {
+                      <section class="full-details-section" aria-labelledby="account-details-title">
+                        <h3 id="account-details-title">Account</h3>
+                        <dl class="full-detail-grid">
+                          <div>
+                            <dt>Owner</dt>
+                            <dd>{{ details.state.owner }}</dd>
+                          </div>
+                          <div>
+                            <dt>Account balance</dt>
+                            <dd>{{ formatYoctoNear(details.accountBalance) }}</dd>
+                          </div>
+                          <div>
+                            <dt>Locked balance</dt>
+                            <dd>{{ formatYoctoNear(details.lockedBalance) }}</dd>
+                          </div>
+                          <div>
+                            <dt>Available to withdraw or delegate</dt>
+                            <dd>{{ formatYoctoNear(details.availableBalance) }}</dd>
+                          </div>
+                          <div>
+                            <dt>Required storage cost</dt>
+                            <dd>{{ formatYoctoNear(details.storageCost) }}</dd>
+                          </div>
+                          <div>
+                            <dt>Storage used</dt>
+                            <dd>{{ details.storageUsage.toLocaleString() }} bytes</dd>
+                          </div>
+                          <div class="full-detail-wide">
+                            <dt>Contract code hash</dt>
+                            <dd class="breakable-value">{{ details.codeHash }}</dd>
+                          </div>
+                          <div>
+                            <dt>Account snapshot block</dt>
+                            <dd>{{ details.blockHeight.toLocaleString() }}</dd>
+                          </div>
+                        </dl>
+                      </section>
+
+                      <section class="full-details-section" aria-labelledby="vault-state-title">
+                        <h3 id="vault-state-title">Vault state</h3>
+                        <dl class="full-detail-grid">
+                          <div>
+                            <dt>Factory index</dt>
+                            <dd>{{ details.state.index }}</dd>
+                          </div>
+                          <div>
+                            <dt>Contract version</dt>
+                            <dd>{{ details.state.version }}</dd>
+                          </div>
+                          <div>
+                            <dt>Current epoch</dt>
+                            <dd>{{ details.state.current_epoch }}</dd>
+                          </div>
+                          <div>
+                            <dt>Takeover listing</dt>
+                            <dd>{{ details.state.is_listed_for_takeover ? 'Listed' : 'Not listed' }}</dd>
+                          </div>
+                        </dl>
+                      </section>
+
+                      <section class="full-details-section" aria-labelledby="validators-title">
+                        <h3 id="validators-title">Active validators</h3>
+                        @if (details.state.active_validators.length > 0) {
+                          <ul class="detail-list">
+                            @for (validator of details.state.active_validators; track validator) {
+                              <li><code>{{ validator }}</code></li>
+                            }
+                          </ul>
+                        } @else {
+                          <p class="detail-empty">This vault is not delegated to a validator.</p>
+                        }
+                      </section>
+
+                      <section class="full-details-section" aria-labelledby="liquidity-title">
+                        <h3 id="liquidity-title">Liquidity request</h3>
+                        @if (details.state.liquidity_request; as request) {
+                          <dl class="full-detail-grid">
+                            <div class="full-detail-wide">
+                              <dt>Token contract</dt>
+                              <dd>{{ request.token }}</dd>
+                            </div>
+                            <div>
+                              <dt>Requested amount</dt>
+                              <dd>{{ request.amount }} token units</dd>
+                            </div>
+                            <div>
+                              <dt>Interest</dt>
+                              <dd>{{ request.interest }} token units</dd>
+                            </div>
+                            <div>
+                              <dt>NEAR collateral</dt>
+                              <dd>{{ formatYoctoNear(request.collateral) }}</dd>
+                            </div>
+                            <div>
+                              <dt>Duration</dt>
+                              <dd>{{ request.duration.toLocaleString() }} seconds</dd>
+                            </div>
+                            <div class="full-detail-wide">
+                              <dt>Created</dt>
+                              <dd>{{ formatNanoseconds(request.created_at) }}</dd>
+                            </div>
+                          </dl>
+                        } @else {
+                          <p class="detail-empty">No active liquidity request.</p>
+                        }
+                      </section>
+
+                      <section class="full-details-section" aria-labelledby="accepted-offer-title">
+                        <h3 id="accepted-offer-title">Accepted offer</h3>
+                        @if (details.state.accepted_offer; as offer) {
+                          <dl class="full-detail-grid">
+                            <div>
+                              <dt>Lender</dt>
+                              <dd>{{ offer.lender }}</dd>
+                            </div>
+                            <div>
+                              <dt>Accepted</dt>
+                              <dd>{{ formatNanoseconds(offer.accepted_at) }}</dd>
+                            </div>
+                          </dl>
+                        } @else {
+                          <p class="detail-empty">No accepted lender offer.</p>
+                        }
+                      </section>
+
+                      <section class="full-details-section" aria-labelledby="unstake-title">
+                        <h3 id="unstake-title">Unstake entries</h3>
+                        @if (details.state.unstake_entries.length > 0) {
+                          <div class="detail-record-list">
+                            @for (entry of details.state.unstake_entries; track entry[0]) {
+                              <div class="detail-record">
+                                <strong>{{ entry[0] }}</strong>
+                                <span>
+                                  {{ formatYoctoNear(entry[1].amount) }} · available at epoch
+                                  {{ entry[1].epoch_height }}
+                                </span>
+                              </div>
+                            }
+                          </div>
+                        } @else {
+                          <p class="detail-empty">No unstake entries.</p>
+                        }
+                      </section>
+
+                      <section class="full-details-section" aria-labelledby="liquidation-title">
+                        <h3 id="liquidation-title">Liquidation</h3>
+                        @if (details.state.liquidation; as liquidation) {
+                          <p class="detail-empty">
+                            {{ formatYoctoNear(liquidation.liquidated) }} liquidated so far.
+                          </p>
+                        } @else {
+                          <p class="detail-empty">No liquidation in progress.</p>
+                        }
+                      </section>
+
+                      <section class="full-details-section" aria-labelledby="counter-offers-title">
+                        <h3 id="counter-offers-title">Counter offers</h3>
+                        @if (details.counterOffers.length > 0) {
+                          <div class="detail-record-list">
+                            @for (counter of details.counterOffers; track counter.accountId) {
+                              <div class="detail-record">
+                                <strong>{{ counter.accountId }}</strong>
+                                <span>
+                                  {{ counter.offer.amount }} token units · {{ formatNanoseconds(counter.offer.timestamp) }}
+                                </span>
+                              </div>
+                            }
+                          </div>
+                        } @else {
+                          <p class="detail-empty">No counter offers.</p>
+                        }
+                      </section>
+
+                      <section class="full-details-section" aria-labelledby="refunds-title">
+                        <h3 id="refunds-title">Pending refunds</h3>
+                        @if (details.refundEntries.length > 0) {
+                          <div class="detail-record-list">
+                            @for (refund of details.refundEntries; track refund.id) {
+                              <div class="detail-record">
+                                <strong>Refund {{ refund.id }} · {{ refund.entry.proposer }}</strong>
+                                <span>
+                                  @if (refund.entry.token) {
+                                    {{ refund.entry.amount }} token units · {{ refund.entry.token }}
+                                  } @else {
+                                    {{ formatYoctoNear(refund.entry.amount) }}
+                                  }
+                                  · added at epoch {{ refund.entry.added_at_epoch }}
+                                </span>
+                              </div>
+                            }
+                          </div>
+                        } @else {
+                          <p class="detail-empty">No pending refunds.</p>
+                        }
+                      </section>
+                    }
                   </div>
-                  <div>
-                    <span>Takeover listing</span>
-                    <strong>{{ vault.isListedForTakeover ? 'Listed' : 'Not listed' }}</strong>
-                  </div>
-                  <div>
-                    <span>Current epoch</span>
-                    <strong>{{ vault.currentEpoch }}</strong>
-                  </div>
-                </div>
+                }
               </article>
             }
           </div>
